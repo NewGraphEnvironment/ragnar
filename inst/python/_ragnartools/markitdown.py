@@ -201,7 +201,8 @@ def convert_to_markdown(
         youtube_transcript_formatter=youtube_transcript_formatter,
     ):
         result = md.convert(x, *args, **kwargs)
-        text = result.markdown.strip()
+        # R strings cannot hold NUL, and some PDFs' text carries one.
+        text = result.markdown.replace("\x00", "").strip()
 
         if result.title is not None:
             title = f"# {result.title}"

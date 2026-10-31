@@ -75,3 +75,12 @@ test_that("read_as_markdown() errors for non-ASCII plain text input", {
     read_as_markdown(file)
   )
 })
+
+test_that("read_as_markdown() drops NUL bytes R cannot hold", {
+  skip_on_cran() # See comment (above) in test-read-markdown.R
+  # Text extracted from some PDFs carries a NUL, and converting it to an R
+  # string failed with "Embedded NUL in string".
+  f <- withr::local_tempfile(fileext = ".txt")
+  writeBin(c(charToRaw("before"), as.raw(0), charToRaw("after\n")), f)
+  expect_equal(as.character(read_as_markdown(f)), "beforeafter")
+})
