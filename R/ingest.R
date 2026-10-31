@@ -197,7 +197,33 @@ ragnar_store_ingest <- function(
 
     chunks <- result$chunks
     if (!result$is_unchanged) {
-      ragnar_store_update(store, chunks)
+      # A worker that could not embed returns its chunks unembedded, and they
+      # are embedded again here, with retries. If the provider refuses this
+      # input (HTTP 400 or 413), report it like a worker failure rather than
+      # ending the ingest; any other error still ends it.
+      embedded <- tryCatch(do_embed(store, chunks), error = identity)
+      if (inherits(embedded, c("httr2_http_400", "httr2_http_413"))) {
+        message <- sprintf(
+          'Embedding the chunks of "%s" failed: %s',
+          task$path,
+          conditionMessage(embedded)
+        )
+        rlang::warn(
+          message = message,
+          class = "ragnar_ingest_worker_error",
+          path = task$path,
+          call = NULL
+        )
+        rows <- summary$path == task$path
+        summary$status[rows] <- "error"
+        summary$n_chunks[rows] <- 0L
+        summary$message[rows] <- message
+        next
+      }
+      if (inherits(embedded, "error")) {
+        stop(embedded)
+      }
+      ragnar_store_update(store, embedded)
     }
 
     origin <- chunks@document@origin
